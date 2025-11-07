@@ -1,0 +1,11 @@
+// Este archivo es un placeholder para el logo basado en diseño.jpeg
+// Reemplaza este archivo con el SVG final cuando esté listo.
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="120" height="120" rx="24" fill="#1A1A1A"/>
+  <text x="50%" y="50%" text-anchor="middle" fill="#fff" font-size="24" dy=".3em">LOGO</text>
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="120" height="120" rx="24" fill="#23215a"/>
+  <path d="M60 28L92 92H28L60 28Z" fill="#cbd8f9"/>
+  <circle cx="60" cy="60" r="14" fill="#fff"/>
+  <circle cx="60" cy="60" r="7" fill="#2f2b79"/>
+</svg>
