@@ -39,6 +39,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "class-variance-authority": "^0.7.1",
     "embla-carousel-react": "^8.6.0",
+    "firebase": "^12.5.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.548.0",
     "react": "^19.1.1",

@@ -355,9 +355,10 @@ export default function PlantillaAvances({ user }) {
 
                       <Dialog
                         open={showReprocesoForm === avance.id}
-                        onOpenChange={(open) =>
-                          setShowReprocesoForm(open ? avance.id : null)
-                        }
+                        onOpenChange={(open) => {
+                          setShowReprocesoForm(open ? avance.id : null);
+                          if (open) setNewReproceso({ horasAdicionales: "", motivo: "" });
+                        }}
                       >
                         <DialogTrigger asChild>
                           <Button
@@ -370,9 +371,10 @@ export default function PlantillaAvances({ user }) {
                           </Button>
                         </DialogTrigger>
 
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Agregar Reproceso</DialogTitle>
+                        <DialogContent className="max-w-md bg-white rounded-2xl shadow-2xl border border-[#cbd8f9] p-6">
+                          <DialogHeader className="mb-3 text-center border-b border-[#e2e7f6] pb-3">
+                            <DialogTitle className="text-xl font-bold text-[#2f2b79]">Agregar Reproceso</DialogTitle>
+                            <p className="text-sm text-[#36418a] mt-1">Registra las horas adicionales y el motivo del reproceso.</p>
                           </DialogHeader>
 
                           <form
@@ -393,6 +395,7 @@ export default function PlantillaAvances({ user }) {
                                   })
                                 }
                                 required
+                                className="border-[#cbd8f9] focus:ring-2 focus:ring-[#2f2b79]"
                               />
                             </div>
                             <div className="space-y-2">
@@ -406,19 +409,21 @@ export default function PlantillaAvances({ user }) {
                                   })
                                 }
                                 required
+                                className="border-[#cbd8f9] focus:ring-2 focus:ring-[#2f2b79]"
                               />
                             </div>
-                            <div className="flex justify-end gap-2">
+                            <div className="flex justify-end gap-3 pt-3 border-t border-[#e2e7f6] mt-2">
                               <Button
                                 type="button"
                                 variant="outline"
                                 onClick={() => setShowReprocesoForm(null)}
+                                className="border-[#cbd8f9] text-[#2f2b79] hover:bg-[#f1f4ff]"
                               >
                                 Cancelar
                               </Button>
                               <Button
                                 type="submit"
-                                className="bg-[#2f2b79] hover:bg-[#1f1c60] text-white"
+                                className="bg-[#2f2b79] hover:bg-[#1f1c60] text-white shadow-md"
                               >
                                 Agregar Reproceso
                               </Button>

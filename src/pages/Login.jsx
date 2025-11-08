@@ -1,40 +1,51 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Mail, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../lib/firebase';
+import { getUser } from '../lib/userService';
+import { RegisterModal } from '../components/RegisterModal';
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const navigate = useNavigate();
 
-  // 🚀 Si ya hay usuario logueado, redirigir automáticamente
-  useEffect(() => {
-    const usuario = JSON.parse(localStorage.getItem("usuario"));
-    if (usuario) {
-      if (usuario.rol === "lider") navigate("/dashboard-lider");
-      else if (usuario.rol === "modelista") navigate("/dashboard-kpis");
-    }
-  }, [navigate]);
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    setLoading(true);
 
-    // 🔹 Simulación de validación (reemplaza por llamada real a tu backend)
-    let usuario = null;
+    try {
+      // 1. Autenticar con Firebase
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
 
-    if (email === "lider@gmail.com" && password === "1234") {
-      usuario = { nombre: "Líder Outfitting", rol: "lider" };
-      navigate("/dashboard-lider");
-    } else if (email === "modelista@gmail.com" && password === "1234") {
-      usuario = { nombre: "Modelista Naval", rol: "modelista" };
-      navigate("/dashboard-kpis");
-    } else {
-      alert("Usuario o contraseña incorrecta");
-      return;
+      // 2. Obtener información adicional del usuario
+      const userProfile = await getUser(userCredential.user.uid);
+      
+      if (!userProfile) {
+        throw new Error('No se encontró el perfil del usuario');
+      }
+
+      // 3. Redirigir según el rol
+      if (userProfile.rol === 'lider') {
+        navigate('/dashboard-lider');
+      } else {
+        navigate('/dashboard-modelista');
+      }
+    } catch (err) {
+      console.error('Error al iniciar sesión:', err);
+      setError('Credenciales inválidas. Por favor, verifica tu correo y contraseña.');
+    } finally {
+      setLoading(false);
     }
-
-    // 🔹 Guardamos el usuario en localStorage
-    localStorage.setItem("usuario", JSON.stringify(usuario));
   };
 
   return (
@@ -125,23 +136,48 @@ export default function LoginPage() {
               />
             </div>
 
+            {error && (
+              <div className="bg-red-100 text-red-600 p-3 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+
             <button
               type="submit"
-              className="relative w-full py-2.5 rounded-xl bg-gradient-to-r from-[#1a2b6f] to-[#2a3c9f] text-white font-semibold shadow-lg hover:shadow-xl transition-all overflow-hidden group"
+              disabled={loading}
+              className="relative w-full py-2.5 rounded-xl bg-gradient-to-r from-[#1a2b6f] to-[#2a3c9f] text-white font-semibold shadow-lg hover:shadow-xl transition-all overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span className="relative z-10">ENTRAR</span>
+              <span className="relative z-10">{loading ? "Iniciando sesión..." : "ENTRAR"}</span>
               <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             </button>
 
-            <p className="text-center text-sm mt-3">
-              <a
-                href="#"
-                className="text-[#3b56d6] hover:underline hover:text-[#0f1e4d] transition-colors"
-              >
-                ¿Olvidó su contraseña?
-              </a>
-            </p>
+            <div className="space-y-3">
+              <p className="text-center text-sm">
+                <a
+                  href="#"
+                  className="text-[#3b56d6] hover:underline hover:text-[#0f1e4d] transition-colors"
+                >
+                  ¿Olvidó su contraseña?
+                </a>
+              </p>
+
+              <p className="text-center text-sm">
+                ¿No tienes una cuenta?{' '}
+                <button
+                  onClick={() => setIsRegisterOpen(true)}
+                  className="text-[#3b56d6] hover:underline hover:text-[#0f1e4d] transition-colors"
+                >
+                  Regístrate aquí
+                </button>
+              </p>
+            </div>
           </form>
+          
+          {/* Modal de Registro */}
+          <RegisterModal 
+            isOpen={isRegisterOpen} 
+            onClose={() => setIsRegisterOpen(false)} 
+          />
         </div>
       </div>
 
@@ -157,10 +193,12 @@ export default function LoginPage() {
         @keyframes waveFast { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
         @keyframes waveMedium { 0% { transform: translateX(0); } 100% { transform: translateX(-35%); } }
         @keyframes waveSlow { 0% { transform: translateX(0); } 100% { transform: translateX(-25%); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .animate-waveFast { animation: waveFast 5s linear infinite; }
         .animate-waveMedium { animation: waveMedium 9s linear infinite; }
         .animate-waveSlow { animation: waveSlow 14s linear infinite; }
         .animate-shipFloat { animation: shipFloat 7s ease-in-out infinite; }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
       `}</style>
     </div>
   );

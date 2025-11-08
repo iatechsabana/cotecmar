@@ -1,4 +1,5 @@
 import { FiLogOut } from "react-icons/fi";
+import { signOut as firebaseSignOut } from "../../lib/authService";
 
 const menuItems = [
   { key: "dashboard", label: "Dashboard" },
@@ -43,7 +44,19 @@ export default function MainLayout({ children, onLogout, activeKey }) {
         </nav>
 
         <button
-          onClick={onLogout}
+          onClick={async () => {
+            try {
+              await firebaseSignOut();
+              // Si se pasó un callback adicional, llamarlo después del signOut
+              if (typeof onLogout === 'function') onLogout();
+              // Redirigir al login (ruta raíz en este proyecto)
+              window.location.href = '/';
+            } catch (err) {
+              console.error('Error cerrando sesión:', err);
+              // Aún así intentar llamar al callback si existe
+              if (typeof onLogout === 'function') onLogout();
+            }
+          }}
           className="mt-8 flex items-center gap-2 text-[#cbd8f9] hover:text-white hover:bg-[#b91c1c] px-4 py-2 rounded-lg transition-colors mb-2 border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-[#ef4444] shadow-sm font-semibold text-base md:text-lg"
           style={{ backgroundColor: "#23215a" }}
         >
