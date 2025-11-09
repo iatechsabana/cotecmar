@@ -12,6 +12,7 @@ import DiccionarioMetricasPage from './pages/DiccionarioMetricasPage.jsx';
 import MetodologiaPage from './pages/MetodologiaPage.jsx';
 import PlantillaAvance from './pages/PlantillaAvancePage.jsx';
 import CalculadoraCgtPage from './pages/CalculadoraCgtPage.jsx';
+import ProductividadPage from './pages/ProductividadPage.jsx';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -27,6 +28,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="/metodologias" element={<MetodologiaPage />} />
           <Route path="/calculadora-cgt" element={<CalculadoraCgtPage />} />
           <Route path="/plantilla-avances" element={<PlantillaAvance />} />
+          <Route path="/productividad" element={<ProductividadPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
