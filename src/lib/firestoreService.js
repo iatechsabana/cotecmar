@@ -60,3 +60,27 @@ export async function setUserProfile(uid, profile) {
   const ref = doc(db, "users", uid);
   await setDoc(ref, { ...profile, updatedAt: serverTimestamp() }, { merge: true });
 }
+
+// -------------------------
+// Productividad events
+// -------------------------
+import { collection as _collection } from "firebase/firestore";
+
+const productividadCol = _collection(db, "productividad");
+
+export async function addProductividadEvent(evento) {
+  const docRef = await addDoc(productividadCol, { ...evento, createdAt: serverTimestamp() });
+  return docRef.id;
+}
+
+export async function getProductividadEvents() {
+  try {
+    const q = query(productividadCol, orderBy("createdAt", "desc"));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.warn('getProductividadEvents: orderBy failed, retrying without orderBy', err);
+    const snap = await getDocs(productividadCol);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  }
+}

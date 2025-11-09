@@ -1,6 +1,8 @@
 "use client";
 import MainLayout from "./layout/MainLayout";
 import { useEffect, useMemo, useState } from "react";
+import { getUsersByRole } from "../lib/userService";
+import { addProductividadEvent, getProductividadEvents } from "../lib/firestoreService";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -17,6 +19,7 @@ const SISTEMAS = ["HVAC", "PIPE", "CBTR"];
 
 export default function ProductividadPage() {
   const [eventos, setEventos] = useState([]);
+  const [modelistas, setModelistas] = useState([]);
   const [form, setForm] = useState({
     fecha: new Date().toISOString().slice(0, 10),
     operario: "Modelista 1",
@@ -29,6 +32,70 @@ export default function ProductividadPage() {
   useEffect(() => {
     const raw = localStorage.getItem("prod_eventos");
     if (raw) setEventos(JSON.parse(raw));
+  }, []);
+
+  // Cargar eventos guardados en Firestore y fusionarlos con los locales
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const remote = await getProductividadEvents();
+
+        // construir mapa de firmas remotas para evitar duplicados
+        const sigRemote = new Set(remote.map(r => `${r.fecha}|${r.operario}|${r.bloque}|${r.sistema}|${r.tipo}|${r.duracionMin}`));
+
+        const raw = localStorage.getItem("prod_eventos");
+        const local = raw ? JSON.parse(raw) : [];
+
+        // incluir remotos (marcados como synced)
+        const merged = remote.map(r => ({ ...r, synced: true }));
+
+        // añadir locales que no estén en remotos (por firma)
+        for (const l of local) {
+          const sig = `${l.fecha}|${l.operario}|${l.bloque}|${l.sistema}|${l.tipo}|${l.duracionMin}`;
+          if (l.pendingSync) {
+            // intentar subir los pendientes
+            try {
+              const newId = await addProductividadEvent({ ...l, createdAt: l.createdAt || undefined });
+              merged.unshift({ ...l, id: newId, synced: true });
+            } catch (err) {
+              console.warn('No se pudo subir evento pendiente:', err);
+              merged.unshift(l);
+            }
+          } else if (!sigRemote.has(sig)) {
+            merged.unshift(l);
+          }
+        }
+
+        if (!mounted) return;
+        // ordenar por fecha/createdAt si es posible
+        merged.sort((a, b) => {
+          if (a.createdAt && b.createdAt) return (b.createdAt.seconds || 0) - (a.createdAt.seconds || 0);
+          return b.fecha.localeCompare(a.fecha);
+        });
+
+        setEventos(merged);
+        localStorage.setItem("prod_eventos", JSON.stringify(merged));
+      } catch (err) {
+        console.error('Error cargando eventos remotos:', err);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  // Cargar modelistas desde Firestore
+  useEffect(() => {
+    let mounted = true;
+    getUsersByRole('modelista')
+      .then((list) => {
+        if (!mounted) return;
+        setModelistas(list || []);
+        if (list && list.length && !form.operario) {
+          setForm((s) => ({ ...s, operario: list[0].nombre || '' }));
+        }
+      })
+      .catch((err) => console.error('Error cargando modelistas:', err));
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
@@ -48,7 +115,22 @@ export default function ProductividadPage() {
       tipo: form.tipo,
       duracionMin: Number(form.duracionMin),
     };
+
+    // Optimistic UI: añadir localmente y luego enviar a Firestore
+    const tempId = ev.id;
     setEventos((prev) => [ev, ...prev]);
+
+    (async () => {
+      try {
+        const remoteId = await addProductividadEvent(ev);
+        // Reemplazar id temporal por id remoto
+        setEventos((prev) => prev.map(it => it.id === tempId ? { ...it, id: remoteId, synced: true } : it));
+      } catch (err) {
+        console.error('Error guardando evento en Firestore:', err);
+        // Marcar como pendiente de sync
+        setEventos((prev) => prev.map(it => it.id === tempId ? { ...it, pendingSync: true } : it));
+      }
+    })();
   }
 
   function reset() {
@@ -125,7 +207,7 @@ export default function ProductividadPage() {
       <section className="max-w-5xl mx-auto px-6 space-y-8">
         <header>
           <h1 className="text-3xl font-bold text-[#2f2b79]">Productividad</h1>
-          <p className="text-[#36418a]">Registra eventos y observa % productivo por operario y matriz Bloque × Sistema. Sin backend.</p>
+          <p className="text-[#36418a]">Registra eventos y observa % productivo por operario y matriz Bloque × Sistema</p>
         </header>
 
         <div className="grid grid-cols-1 gap-6">
@@ -139,7 +221,20 @@ export default function ProductividadPage() {
 
             <div>
               <Label>Operario</Label>
-              <Input value={form.operario} onChange={(e) => setForm(s => ({ ...s, operario: e.target.value }))} className="mt-2" />
+              {modelistas && modelistas.length ? (
+                <Select value={form.operario} onValueChange={(v) => setForm(s => ({ ...s, operario: v }))}>
+                  <SelectTrigger className="mt-2 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modelistas.map((u) => (
+                      <SelectItem key={u.id} value={u.nombre}>{u.nombre}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input value={form.operario} onChange={(e) => setForm(s => ({ ...s, operario: e.target.value }))} className="mt-2" />
+              )}
             </div>
 
             <div>
