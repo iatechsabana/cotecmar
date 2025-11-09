@@ -1,9 +1,13 @@
 import { FiLogOut } from "react-icons/fi";
+import { MdCalculate } from "react-icons/md";
 import { signOut as firebaseSignOut } from "../../lib/authService";
+import { useAuth } from "../../lib/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const menuItems = [
   { key: "dashboard", label: "Dashboard" },
   { key: "productividad", label: "Productividad", path: "/productividad" },
+  { key: "calculadora", label: "Calculadora CGT", path: "/calculadora-cgt" },
   { key: "avances", label: "Plantilla Avances" , path: "/plantilla-avances"},
   { key: "manual", label: "Manual de Usuario" , path: "/manual-usuario" },
   { key: "metodologias", label: "Metodologías" , path: "/metodologias"},
@@ -11,6 +15,8 @@ const menuItems = [
 ];
 
 export default function MainLayout({ children, onLogout, activeKey }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen flex bg-gradient-to-b from-[#cbd8f9] to-[#dfe8fb] w-full overflow-hidden">
       {/* Sidebar fijo */}
@@ -34,8 +40,11 @@ export default function MainLayout({ children, onLogout, activeKey }) {
                 <button
                   className={`w-full flex items-center px-3 md:px-4 py-3 rounded-lg transition-colors font-semibold text-left border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-[#cbd8f9] shadow-sm 
                     ${activeKey === item.key ? "bg-[#23215a] text-white border-[#cbd8f9]" : "text-bg-[#23215a] hover:bg-[#2f2b79] hover:text-white"}`}
-                  onClick={() => (window.location.href = item.path || "#")}
+                  onClick={() => {
+                    if (item.path) navigate(item.path);
+                  }}
                 >
+                  {item.key === 'calculadora' ? <MdCalculate className="mr-3" /> : null}
                   <span className="truncate text-base md:text-lg tracking-wide">{item.label}</span>
                 </button>
               </li>
@@ -69,7 +78,17 @@ export default function MainLayout({ children, onLogout, activeKey }) {
       <div className="flex-1 flex flex-col min-h-screen ml-20 md:ml-56 w-full">
         {/* Header fijo */}
         <header className="h-16 bg-[#2f2b79] bg-opacity-90 flex items-center px-4 md:px-8 shadow-md w-full fixed top-0 left-80 md:left-100 right-0 z-10">
-          <h1 className="text-white text-lg md:text-2xl font-semibold tracking-wide">Dashboard</h1>
+            <div className="flex-1">
+              <h1 className="text-white text-lg md:text-2xl font-semibold tracking-wide">Dashboard</h1>
+            </div>
+            <div className="flex items-center gap-3">
+              {user?.nombre ? (
+                <div className="hidden md:flex items-center gap-3 mr-2">
+                  <div className="w-8 h-8 rounded-full bg-[#eef2ff] flex items-center justify-center text-sm font-bold text-[#1e293b]">{user.nombre.charAt(0).toUpperCase()}</div>
+                  <div className="text-sm text-[#0f1724]">{user.nombre}</div>
+                </div>
+              ) : null}
+            </div>
         </header>
 
         {/* Main area: mt-16 para no quedar debajo del header.

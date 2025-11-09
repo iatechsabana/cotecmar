@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import MainLayout from "./layout/MainLayout";
 import {
   CheckCircle,
@@ -34,45 +34,15 @@ import {
   DialogTrigger,
 } from "../ui/dialog";
 
-const mockAvances = [
-  {
-    id: 1,
-    proyecto: "Fragata F-110",
-    swbs: "SWB-001",
-    actividad: "Diseño estructural del casco",
-    horasInvertidas: 45,
-    avanceMm: 850,
-    totalMm: 1200,
-    estado: "En progreso",
-    comentarios: "Avance según cronograma",
-    fecha: "2024-01-15",
-    reprocesos: [
-      {
-        id: 1,
-        numero: 1,
-        horasAdicionales: 8,
-        motivo: "Corrección de medidas según especificaciones",
-        fecha: "2024-01-20",
-      },
-    ],
-  },
-  {
-    id: 2,
-    proyecto: "Patrullera CPV-46",
-    swbs: "SWB-002",
-    actividad: "Outfitting eléctrico",
-    horasInvertidas: 32,
-    avanceMm: 650,
-    totalMm: 800,
-    estado: "Completado",
-    comentarios: "Finalizado exitosamente",
-    fecha: "2024-01-10",
-    reprocesos: [],
-  },
-];
+// Removed mock data: avances are loaded from Firestore per user. Default to empty list.
+
+import { addAvance, getAvancesByUser, addReproceso } from "../lib/firestoreService";
+import { useAuth } from "../lib/AuthContext";
+import { toast } from "../ui/use-toast";
 
 export default function PlantillaAvances({ user }) {
-  const [avances, setAvances] = useState(mockAvances);
+  const { user: authUser, isAuthenticated } = useAuth();
+  const [avances, setAvances] = useState([]);
   const [showNewForm, setShowNewForm] = useState(false);
   const [showReprocesoForm, setShowReprocesoForm] = useState(null);
   const [newAvance, setNewAvance] = useState({
@@ -90,6 +60,40 @@ export default function PlantillaAvances({ user }) {
     motivo: "",
   });
 
+  const [loading, setLoading] = useState(false);
+
+  // Cargar avances desde Firestore cuando el usuario esté disponible
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (!isAuthenticated || !authUser?.uid) return;
+      setLoading(true);
+      try {
+        const data = await getAvancesByUser(authUser.uid);
+        if (mounted) {
+          // Normalize avances: ensure reprocesos is always an array and add helper flags
+          const normalized = (data || []).map((a) => ({
+            ...a,
+            reprocesos: a.reprocesos || [],
+            pendingReprocesos: a.pendingReprocesos || [],
+            syncing: !!a.syncing,
+            horasInvertidas: typeof a.horasInvertidas === 'number' ? a.horasInvertidas : Number(a.horasInvertidas) || 0,
+          }));
+          setAvances(normalized);
+        }
+      } catch (err) {
+        console.error('Error cargando avances:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, [isAuthenticated, authUser]);
+
   const handleSubmitAvance = (e) => {
     e.preventDefault();
     const avance = {
@@ -101,7 +105,46 @@ export default function PlantillaAvances({ user }) {
       fecha: new Date().toISOString().split("T")[0],
       reprocesos: [],
     };
-    setAvances([...avances, avance]);
+    // Guardado optimista: añadimos el avance localmente con id temporal
+  const tempId = `temp-${Date.now()}`
+  const optimisticAvance = { ...avance, id: tempId, pendingReprocesos: [], syncing: true }
+  setAvances((prev) => [...prev, optimisticAvance])
+
+    // Intentar persistir en Firestore
+    if (isAuthenticated && authUser?.uid) {
+      (async () => {
+        try {
+          const id = await addAvance({ ...avance, userId: authUser.uid })
+          // Obtener reprocesos pendientes antes de actualizar el estado
+          let pending = []
+          setAvances((prev) => {
+            const item = prev.find((p) => p.id === tempId)
+            pending = item?.pendingReprocesos || []
+            return prev.map((a) => (a.id === tempId ? { ...a, id, syncing: false, pendingReprocesos: [] } : a))
+          })
+          // Sincronizar reprocesos pendientes si existen
+          if (pending.length) {
+            for (const rp of pending) {
+              try {
+                await addReproceso(id, rp)
+              } catch (err) {
+                console.error('Error sincronizando reproceso pendiente:', err)
+                toast({ title: 'Error', description: 'No se pudo sincronizar un reproceso pendiente.', variant: 'destructive' })
+              }
+            }
+          }
+          toast({ title: 'Avance guardado', description: 'El avance se guardó correctamente.', variant: 'default' })
+        } catch (err) {
+          console.error('Error guardando avance:', err)
+          // Revertir el avance temporal
+          setAvances((prev) => prev.filter((a) => a.id !== tempId))
+          toast({ title: 'Error', description: 'No se pudo guardar el avance. Intenta de nuevo.', variant: 'destructive' })
+        }
+      })()
+    } else {
+      // Offline / no autenticado: mantener el avance local y notificar
+      toast({ title: 'Registro local', description: 'El avance se registró localmente (usuario no autenticado).', variant: 'default' })
+    }
     setNewAvance({
       proyecto: "",
       swbs: "",
@@ -122,23 +165,59 @@ export default function PlantillaAvances({ user }) {
 
     const reproceso = {
       id: Date.now(),
-      numero: avance.reprocesos.length + 1,
-      horasAdicionales: Number(newReproceso.horasAdicionales),
+      numero: (avance.reprocesos?.length || 0) + 1,
+      horasAdicionales: Number(newReproceso.horasAdicionales) || 0,
       motivo: newReproceso.motivo,
       fecha: new Date().toISOString().split("T")[0],
     };
 
+    const previousAvances = avances;
     const updatedAvances = avances.map((a) =>
       a.id === avanceId
         ? {
-          ...a,
-          reprocesos: [...a.reprocesos, reproceso],
-          horasInvertidas: a.horasInvertidas + reproceso.horasAdicionales,
-        }
+            ...a,
+            reprocesos: [...(a.reprocesos || []), reproceso],
+            horasInvertidas: (a.horasInvertidas || 0) + reproceso.horasAdicionales,
+          }
         : a
     );
 
-    setAvances(updatedAvances);
+    // Si el avance tiene un id temporal (optimistic), no podemos persistir todavía
+    if (String(avance.id).startsWith('temp-')) {
+      // Añadir reproceso y marcarlo como pendiente para sincronizar más tarde
+      setAvances((prev) =>
+        prev.map((a) =>
+          a.id === avanceId
+            ? {
+                ...a,
+                reprocesos: [...(a.reprocesos || []), reproceso],
+                horasInvertidas: (a.horasInvertidas || 0) + reproceso.horasAdicionales,
+                pendingReprocesos: [...(a.pendingReprocesos || []), reproceso],
+                syncing: true,
+              }
+            : a,
+        ),
+      )
+      toast({ title: 'Sincronizando', description: 'El registro se sincronizará cuando el avance se guarde en el servidor.', variant: 'default' })
+    } else if (isAuthenticated && authUser?.uid && avance.id && typeof avance.id === 'string') {
+      // Optimistic update: mostrar inmediatamente y luego persistir
+      setAvances(updatedAvances)
+      ;(async () => {
+        try {
+          await addReproceso(avance.id, reproceso)
+          toast({ title: 'Reproceso agregado', description: 'El reproceso se guardó correctamente.', variant: 'default' })
+        } catch (err) {
+          console.error('Error agregando reproceso:', err)
+          // Revertir a estado previo
+          setAvances(previousAvances)
+          toast({ title: 'Error', description: 'No se pudo guardar el reproceso. Intenta de nuevo.', variant: 'destructive' })
+        }
+      })()
+    } else {
+      // Offline / no autenticado: mantener local
+      setAvances(updatedAvances)
+      toast({ title: 'Registro local', description: 'El reproceso se registró localmente (usuario no autenticado).', variant: 'default' })
+    }
     setNewReproceso({ horasAdicionales: "", motivo: "" });
     setShowReprocesoForm(null);
   };
@@ -171,6 +250,13 @@ export default function PlantillaAvances({ user }) {
 
   return (
     <MainLayout activeKey="avances" onLogout={() => alert("Cerrar sesión")}>
+      {loading ? (
+        <div className="w-full flex justify-center items-center py-24">
+          <div className="bg-white rounded-xl shadow p-8 text-center">
+            <p className="text-lg text-[#2f2b79]">Cargando avances...</p>
+          </div>
+        </div>
+      ) : (
       <div className="w-full flex justify-center">
         <section className="w-full max-w-6xl mx-auto px-6 py-6 space-y-8">
           <header className="text-center">
@@ -336,7 +422,7 @@ export default function PlantillaAvances({ user }) {
               >
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3">
                       {getStatusIcon(avance.estado)}
                       <div>
                         <CardTitle className="text-[#2f2b79] text-lg">
@@ -345,6 +431,9 @@ export default function PlantillaAvances({ user }) {
                         <p className="text-sm text-[#36418a]">
                           {avance.swbs} • {avance.actividad}
                         </p>
+                        { (avance.syncing || String(avance.id).startsWith('temp-')) && (
+                          <span className="inline-block mt-1 text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">Sincronizando…</span>
+                        ) }
                       </div>
                     </div>
 
@@ -461,7 +550,7 @@ export default function PlantillaAvances({ user }) {
                     <div>
                       <p className="text-sm text-[#36418a]">Reprocesos</p>
                       <p className="text-lg font-semibold text-[#2f2b79]">
-                        {avance.reprocesos.length}
+                        {(avance.reprocesos || []).length}
                       </p>
                     </div>
                   </div>
@@ -475,11 +564,11 @@ export default function PlantillaAvances({ user }) {
                     </div>
                   )}
 
-                  {avance.reprocesos.length > 0 && (
+                  {(avance.reprocesos || []).length > 0 && (
                     <div>
                       <p className="text-sm text-[#36418a] mb-2">Reprocesos:</p>
                       <div className="space-y-2">
-                        {avance.reprocesos.map((reproceso) => (
+                        {(avance.reprocesos || []).map((reproceso) => (
                           <div
                             key={reproceso.id}
                             className="p-3 bg-[#f4f7fe] rounded-lg border border-[#e2e7f6]"
@@ -509,6 +598,7 @@ export default function PlantillaAvances({ user }) {
           </div>
         </section>
       </div>
+      )}
     </MainLayout>
   );
 }

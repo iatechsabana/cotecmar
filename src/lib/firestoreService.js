@@ -23,9 +23,18 @@ export async function addAvance(avance) {
 }
 
 export async function getAvancesByUser(userId) {
-  const q = query(avancesCol, where("userId", "==", userId), orderBy("createdAt", "desc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  // Intentamos la consulta ordenada; si Firestore requiere un índice, hacemos un fallback
+  try {
+    const q = query(avancesCol, where("userId", "==", userId), orderBy("createdAt", "desc"));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    // Error común: "The query requires an index" -> fallback sin orderBy
+    console.warn('getAvancesByUser: query with orderBy failed, retrying without orderBy', err);
+    const q2 = query(avancesCol, where("userId", "==", userId));
+    const snap2 = await getDocs(q2);
+    return snap2.docs.map((d) => ({ id: d.id, ...d.data() }));
+  }
 }
 
 export async function addReproceso(avanceId, reproceso) {
