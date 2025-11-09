@@ -1,5 +1,17 @@
 "use client";
+import MainLayout from "./layout/MainLayout";
 import { useEffect, useMemo, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
+import { Label } from "../ui/label";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "../ui/select";
 
 const SISTEMAS = ["HVAC", "PIPE", "CBTR"];
 
@@ -109,138 +121,146 @@ export default function ProductividadPage() {
   }, [eventos]);
 
   return (
-    <main className="p-6 md:p-10 max-w-6xl mx-auto space-y-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl md:text-3xl font-semibold">
-          Productividad — Operario y Bloque/Sistema (mock)
-        </h1>
-        <p className="text-sm text-gray-600">
-          Registra eventos y observa % productivo por operario y matriz Bloque × Sistema. Sin backend.
-        </p>
-      </header>
+    <MainLayout activeKey="productividad">
+      <section className="max-w-5xl mx-auto px-6 space-y-8">
+        <header>
+          <h1 className="text-3xl font-bold text-[#2f2b79]">Productividad</h1>
+          <p className="text-[#36418a]">Registra eventos y observa % productivo por operario y matriz Bloque × Sistema. Sin backend.</p>
+        </header>
 
-      <section className="rounded-2xl border p-4 space-y-3 bg-white">
-        <h2 className="text-lg font-medium">Registrar evento</h2>
-        <form onSubmit={addEvento} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 items-end">
-          <Input label="Fecha" type="date" value={form.fecha} onChange={(v) => setForm(s => ({ ...s, fecha: v }))} />
-          <Input label="Operario" value={form.operario} onChange={(v) => setForm(s => ({ ...s, operario: v }))} />
-          <Input label="Bloque" value={form.bloque || ""} onChange={(v) => setForm(s => ({ ...s, bloque: v }))} />
-          <Select label="Sistema" value={form.sistema} onChange={(v) => setForm(s => ({ ...s, sistema: v }))} options={SISTEMAS} />
-          <Select label="Tipo" value={form.tipo} onChange={(v) => setForm(s => ({ ...s, tipo: v }))} options={["PRODUCTIVO", "PNP", "TM", "RW", "ADM", "CAP_NP"]} />
-          <Input label="Duración (min)" type="number" min={1} value={form.duracionMin} onChange={(v) => setForm(s => ({ ...s, duracionMin: Number(v) }))} />
-          <div>
-            <button className="px-4 py-2 rounded-xl border hover:shadow w-full">Agregar</button>
+        <div className="grid grid-cols-1 gap-6">
+        <div className="bg-white rounded-xl shadow p-6 hover:shadow-lg transition-shadow border border-gray-200">
+          <h2 className="text-lg font-semibold text-[#2f2b79] mb-4">Registrar evento</h2>
+          <form onSubmit={addEvento} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 items-end">
+            <div>
+              <Label>Fecha</Label>
+              <Input type="date" value={form.fecha} onChange={(e) => setForm(s => ({ ...s, fecha: e.target.value }))} className="mt-2" />
+            </div>
+
+            <div>
+              <Label>Operario</Label>
+              <Input value={form.operario} onChange={(e) => setForm(s => ({ ...s, operario: e.target.value }))} className="mt-2" />
+            </div>
+
+            <div>
+              <Label>Bloque</Label>
+              <Input value={form.bloque || ""} onChange={(e) => setForm(s => ({ ...s, bloque: e.target.value }))} className="mt-2" />
+            </div>
+
+            <div>
+              <Label>Sistema</Label>
+              <Select value={form.sistema} onValueChange={(v) => setForm(s => ({ ...s, sistema: v }))}>
+                <SelectTrigger className="mt-2 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SISTEMAS.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Tipo</Label>
+              <Select value={form.tipo} onValueChange={(v) => setForm(s => ({ ...s, tipo: v }))}>
+                <SelectTrigger className="mt-2 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {['PRODUCTIVO', 'PNP', 'TM', 'RW', 'ADM', 'CAP_NP'].map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Duración (min)</Label>
+              <Input type="number" min={1} value={form.duracionMin} onChange={(e) => setForm(s => ({ ...s, duracionMin: Number(e.target.value) }))} className="mt-2" />
+            </div>
+
+            <div>
+              <Button className="w-full">Agregar</Button>
+            </div>
+          </form>
+          <div className="text-right mt-3">
+            <Button variant="ghost" size="sm" onClick={reset} className="text-red-600">Borrar todo (mock)</Button>
           </div>
-        </form>
-        <div className="text-right">
-          <button onClick={reset} className="text-sm text-red-600 underline">
-            Borrar todo (mock)
-          </button>
         </div>
-      </section>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium">Productividad promedio por operario</h2>
-        <div className="overflow-x-auto rounded-2xl border bg-white">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr className="text-left">
-                <Th>Operario</Th>
-                <Th className="text-right">Días</Th>
-                <Th className="text-right">TPR (min)</Th>
-                <Th className="text-right">TD (min)</Th>
-                <Th className="text-right">% Productivo</Th>
-                <Th className="text-right">% PNP</Th>
-                <Th className="text-right">% TM</Th>
-                <Th className="text-right">% RW</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {porOperario.map(r => (
-                <tr key={r.operario} className="border-t">
-                  <Td>{r.operario}</Td>
-                  <Td className="text-right">{r.dias}</Td>
-                  <Td className="text-right">{fmt(r.tpr)}</Td>
-                  <Td className="text-right">{fmt(r.td)}</Td>
-                  <Td className="text-right">{fmt(r.pctProd, 1)}%</Td>
-                  <Td className="text-right">{fmt(r.pctPNP, 1)}%</Td>
-                  <Td className="text-right">{fmt(r.pctTM, 1)}%</Td>
-                  <Td className="text-right">{fmt(r.pctRW, 1)}%</Td>
+        <div className="bg-white rounded-xl shadow p-6 hover:shadow-lg transition-shadow border border-gray-200">
+          <h2 className="text-lg font-medium">Productividad promedio por operario</h2>
+          <div className="overflow-x-auto mt-3">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr className="text-left">
+                  <Th>Operario</Th>
+                  <Th className="text-right">Días</Th>
+                  <Th className="text-right">TPR (min)</Th>
+                  <Th className="text-right">TD (min)</Th>
+                  <Th className="text-right">% Productivo</Th>
+                  <Th className="text-right">% PNP</Th>
+                  <Th className="text-right">% TM</Th>
+                  <Th className="text-right">% RW</Th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium">Bloque × Sistema (min PRODUCTIVOS)</h2>
-        <div className="overflow-x-auto rounded-2xl border bg-white">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <Th>Bloque</Th>
-                {SISTEMAS.map((s) => (
-                  <Th key={s} className="text-right">{s}</Th>
-                ))}
-                <Th className="text-right">Total</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {matriz.bloques.map((b) => {
-                const total = SISTEMAS.reduce((sum, s) => {
-                  const key = `${b}|${s}`;
-                  return sum + (matriz.map.get(key) || 0);
-                }, 0);
-                return (
-                  <tr key={b} className="border-t">
-                    <Td>{b}</Td>
-                    {SISTEMAS.map((s) => {
-                      const v = matriz.map.get(`${b}|${s}`) || 0;
-                      return <Td key={s} className="text-right">{fmt(v)}</Td>;
-                    })}
-                    <Td className="text-right font-medium">{fmt(total)}</Td>
+              </thead>
+              <tbody>
+                {porOperario.map(r => (
+                  <tr key={r.operario} className="border-t">
+                    <Td>{r.operario}</Td>
+                    <Td className="text-right">{r.dias}</Td>
+                    <Td className="text-right">{fmt(r.tpr)}</Td>
+                    <Td className="text-right">{fmt(r.td)}</Td>
+                    <Td className="text-right">{fmt(r.pctProd, 1)}%</Td>
+                    <Td className="text-right">{fmt(r.pctPNP, 1)}%</Td>
+                    <Td className="text-right">{fmt(r.pctTM, 1)}%</Td>
+                    <Td className="text-right">{fmt(r.pctRW, 1)}%</Td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <p className="text-xs text-gray-500">Solo se incluyen eventos tipo PRODUCTIVO.</p>
+
+        <div className="bg-white rounded-xl shadow p-6 hover:shadow-lg transition-shadow border border-gray-200">
+          <h2 className="text-lg font-medium">Bloque × Sistema (min PRODUCTIVOS)</h2>
+          <div className="overflow-x-auto mt-3">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <Th>Bloque</Th>
+                  {SISTEMAS.map((s) => (
+                    <Th key={s} className="text-right">{s}</Th>
+                  ))}
+                  <Th className="text-right">Total</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {matriz.bloques.map((b) => {
+                  const total = SISTEMAS.reduce((sum, s) => {
+                    const key = `${b}|${s}`;
+                    return sum + (matriz.map.get(key) || 0);
+                  }, 0);
+                  return (
+                    <tr key={b} className="border-t">
+                      <Td>{b}</Td>
+                      {SISTEMAS.map((s) => {
+                        const v = matriz.map.get(`${b}|${s}`) || 0;
+                        return <Td key={s} className="text-right">{fmt(v)}</Td>;
+                      })}
+                      <Td className="text-right font-medium">{fmt(total)}</Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-gray-500 mt-3">Solo se incluyen eventos tipo PRODUCTIVO.</p>
+        </div>
+        </div>
       </section>
-    </main>
-  );
-}
-
-function Input({ label, value, onChange, type = "text", min }) {
-  return (
-    <label className="text-sm">
-      {label}
-      <input
-        className="mt-1 block w-full border rounded-lg px-2 py-1"
-        value={value ?? ""}
-        type={type}
-        min={min}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </label>
-  );
-}
-
-function Select({ label, value, onChange, options }) {
-  return (
-    <label className="text-sm">
-      {label}
-      <select
-        className="mt-1 block w-full border rounded-lg px-2 py-1"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {options.map((op) => (
-          <option key={op} value={op}>{op}</option>
-        ))}
-      </select>
-    </label>
+    </MainLayout>
   );
 }
 
