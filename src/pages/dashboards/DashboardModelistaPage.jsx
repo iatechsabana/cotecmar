@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import MainLayout from "../layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
 import { Button } from "../../ui/button";
@@ -8,26 +8,76 @@ import { Badge } from "../../ui/badge";
 import { Progress } from "../../ui/progress";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Clock, CheckCircle, AlertCircle, Plus } from "lucide-react";
+import { useAuth } from "../../lib/AuthContext";
+import { getAvancesByUser, getProductividadEvents } from "../../lib/firestoreService";
 
 export default function DashboardModelistaPage() {
   const [activeTab, setActiveTab] = useState("resumen");
+  const { user: authUser, isAuthenticated } = useAuth();
 
-  const mockData = [
-    { actividad: "Diseño Casco", horas: 45, estado: "Completado" },
-    { actividad: "Outfitting Eléctrico", horas: 32, estado: "En progreso" },
-    { actividad: "Sistemas HVAC", horas: 28, estado: "En progreso" },
-    { actividad: "Acabados Interiores", horas: 15, estado: "Bloqueado" },
-  ];
+  const [avances, setAvances] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const mockProjects = [
-    { id:1,proyecto:"Fragata F-110",swb:"SWB-001",actividad:"Diseño estructural del casco",horasInvertidas:45,avanceMm:850,totalMm:1200,estado:"En progreso"},
-    { id:2,proyecto:"Patrullera CPV-46",swb:"SWB-002",actividad:"Outfitting eléctrico",horasInvertidas:32,avanceMm:650,totalMm:800,estado:"Completado"},
-  ];
+  // Cargar avances reales del usuario modelista
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (!isAuthenticated || !authUser?.uid) return;
+      setLoading(true);
+      try {
+        const data = await getAvancesByUser(authUser.uid);
+        if (mounted) {
+          // Normalize
+          const normalized = (data || []).map((a) => ({
+            ...a,
+            reprocesos: a.reprocesos || [],
+            horasInvertidas: Number(a.horasInvertidas) || 0,
+            avanceMm: Number(a.avanceMm) || 0,
+            totalMm: Number(a.totalMm) || 0,
+          }));
+          setAvances(normalized);
+        }
+      } catch (err) {
+        console.error('Error cargando avances del usuario:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
 
-  const totalHoras = mockData.reduce((sum, item) => sum + item.horas, 0);
-  const completadas = mockData.filter((item) => item.estado === "Completado").length;
-  const enProgreso = mockData.filter((item) => item.estado === "En progreso").length;
-  const bloqueadas = mockData.filter((item) => item.estado === "Bloqueado").length;
+    load();
+    return () => { mounted = false; };
+  }, [isAuthenticated, authUser]);
+
+    // Cargar eventos de productividad y filtrarlos por operario (nombre)
+    const [prodEvents, setProdEvents] = useState([]);
+    useEffect(() => {
+      let mounted = true;
+      (async () => {
+        if (!isAuthenticated || !authUser) return;
+        try {
+          const all = await getProductividadEvents();
+          // Filtrar por operario (nombre) si existe
+          const nombre = authUser?.nombre || '';
+          const filtered = (all || []).filter(e => {
+            if (!nombre) return false;
+            return String(e.operario || '').toLowerCase() === String(nombre).toLowerCase();
+          }).map(e => ({ ...e, duracionMin: Number(e.duracionMin) || 0 }));
+          if (!mounted) return;
+          setProdEvents(filtered);
+        } catch (err) {
+          console.error('Error cargando eventos productividad:', err);
+        }
+      })();
+      return () => { mounted = false; };
+    }, [isAuthenticated, authUser]);
+
+  // KPIs calculados a partir de avances + productividad
+  const totalHorasAvances = useMemo(() => avances.reduce((s, a) => s + (a.horasInvertidas || 0), 0), [avances]);
+  const totalHorasProd = useMemo(() => prodEvents.reduce((s, p) => s + (p.duracionMin || 0), 0), [prodEvents]);
+  const totalHoras = totalHorasAvances + totalHorasProd;
+  const completadas = useMemo(() => avances.filter(a => a.estado === 'Completado').length, [avances]);
+  const enProgreso = useMemo(() => avances.filter(a => a.estado === 'En progreso').length, [avances]);
+  const bloqueadas = useMemo(() => avances.filter(a => a.estado === 'Bloqueado').length, [avances]);
 
   const getStatusVariant = (estado) => {
     switch (estado) {
@@ -63,7 +113,7 @@ export default function DashboardModelistaPage() {
                     <Clock className="w-7 h-7 text-[#2f2b79]" />
                   </div>
                   <div>
-                    <p className="text-3xl font-bold text-[#2f2b79]">{totalHoras}</p>
+                    <p className="text-3xl font-bold text-[#2f2b79]">{loading ? '—' : totalHoras}</p>
                     <p className="text-xs text-[#36418a]">Horas Totales</p>
                   </div>
                 </CardContent>
@@ -75,7 +125,7 @@ export default function DashboardModelistaPage() {
                     <CheckCircle className="w-7 h-7 text-green-500" />
                   </div>
                   <div>
-                    <p className="text-3xl font-bold text-[#2f2b79]">{completadas}</p>
+                    <p className="text-3xl font-bold text-[#2f2b79]">{loading ? '—' : completadas}</p>
                     <p className="text-xs text-[#36418a]">Completadas</p>
                   </div>
                 </CardContent>
@@ -87,7 +137,7 @@ export default function DashboardModelistaPage() {
                     <Clock className="w-7 h-7 text-blue-500" />
                   </div>
                   <div>
-                    <p className="text-3xl font-bold text-[#2f2b79]">{enProgreso}</p>
+                    <p className="text-3xl font-bold text-[#2f2b79]">{loading ? '—' : enProgreso}</p>
                     <p className="text-xs text-[#36418a]">En Progreso</p>
                   </div>
                 </CardContent>
@@ -99,7 +149,7 @@ export default function DashboardModelistaPage() {
                     <AlertCircle className="w-7 h-7 text-red-500" />
                   </div>
                   <div>
-                    <p className="text-3xl font-bold text-[#2f2b79]">{bloqueadas}</p>
+                    <p className="text-3xl font-bold text-[#2f2b79]">{loading ? '—' : bloqueadas}</p>
                     <p className="text-xs text-[#36418a]">Bloqueadas</p>
                   </div>
                 </CardContent>
@@ -114,7 +164,20 @@ export default function DashboardModelistaPage() {
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={mockData}>
+                    <BarChart data={(() => {
+                      // Agregar horas por actividad desde avances
+                      const acc = {};
+                      for (const a of avances) {
+                        const key = a.actividad || 'Sin actividad';
+                        acc[key] = (acc[key] || 0) + (a.horasInvertidas || 0);
+                      }
+                      // Añadir eventos de productividad agrupados por sistema o tipo
+                      for (const p of prodEvents) {
+                        const key = `Prod: ${p.sistema || p.tipo || 'Otros'}`;
+                        acc[key] = (acc[key] || 0) + (p.duracionMin || 0);
+                      }
+                      return Object.entries(acc).map(([actividad, horas]) => ({ actividad, horas }));
+                    })()}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="actividad" angle={-45} textAnchor="end" height={80} />
                       <YAxis />
@@ -130,24 +193,40 @@ export default function DashboardModelistaPage() {
                   <CardTitle className="text-[#2f2b79]">Proyectos Activos</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-5">
-                  {mockProjects.map((project) => (
-                    <div key={project.id} className="p-5 border rounded-xl bg-white">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-[#2f2b79]">{project.proyecto}</h4>
-                        <Badge variant={getStatusVariant(project.estado)}>{project.estado}</Badge>
-                      </div>
+                  {(() => {
+                    const proyectosMap = new Map();
+                    for (const a of avances) {
+                      const key = a.proyecto || 'Sin proyecto';
+                      const entry = proyectosMap.get(key) || { proyecto: key, horas: 0, avanceMm: 0, totalMm: 0, count: 0, estado: 'En progreso' };
+                      entry.horas += (a.horasInvertidas || 0);
+                      entry.avanceMm += (a.avanceMm || 0);
+                      entry.totalMm += (a.totalMm || 0);
+                      entry.count += 1;
+                      if (a.estado === 'Completado') entry.estado = 'Completado';
+                      proyectosMap.set(key, entry);
+                    }
 
-                      <p className="text-sm text-[#36418a] mb-2">{project.actividad}</p>
-
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm text-[#36418a]">
-                          <span>Avance: {project.avanceMm}mm / {project.totalMm}mm</span>
-                          <span>{Math.round((project.avanceMm / project.totalMm) * 100)}%</span>
+                    const proyectos = Array.from(proyectosMap.values());
+                    if (!proyectos.length) return <p className="text-sm text-[#36418a]">No hay proyectos asignados.</p>
+                    return proyectos.map((project, idx) => (
+                      <div key={idx} className="p-5 border rounded-xl bg-white">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-semibold text-[#2f2b79]">{project.proyecto}</h4>
+                          <Badge variant={getStatusVariant(project.estado)}>{project.estado}</Badge>
                         </div>
-                        <Progress value={(project.avanceMm / project.totalMm)*100} />
+
+                        <p className="text-sm text-[#36418a] mb-2">Registros: {project.count}</p>
+
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm text-[#36418a]">
+                            <span>Avance: {project.avanceMm}mm / {project.totalMm}mm</span>
+                            <span>{project.totalMm ? Math.round((project.avanceMm / project.totalMm) * 100) : 0}%</span>
+                          </div>
+                          <Progress value={project.totalMm ? (project.avanceMm / project.totalMm) * 100 : 0} />
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ));
+                  })()}
                 </CardContent>
               </Card>
             </div>
