@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import MainLayout from "../layout/MainLayout";
 import {
   ResponsiveContainer,
@@ -13,11 +13,11 @@ import {
   Cell,
 } from "recharts";
 import { Users, Clock, TrendingUp, AlertTriangle, Settings } from "lucide-react";
+import { getAllAvances } from "../../lib/firestoreService";
 
+// We'll compute real data from Firestore; mock used as fallback
 const mockGlobalData = [
-  { proyecto: "Fragata F-110", horasTotal: 1250, avancePromedio: 75, reprocesos: 8 },
-  { proyecto: "Patrullera CPV-46", horasTotal: 890, avancePromedio: 92, reprocesos: 3 },
-  { proyecto: "Corbeta ARC", horasTotal: 1450, avancePromedio: 45, reprocesos: 12 },
+  { proyecto: "Sin datos", horasTotal: 0, avancePromedio: 0, reprocesos: 0 },
 ];
 
 const curvaS = [
@@ -37,13 +37,47 @@ const estadosData = [
 
 export default function LiderDashboardPage() {
   const [activeTab, setActiveTab] = useState("global");
+  const [avances, setAvances] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const totalHoras = mockGlobalData.reduce((s, i) => s + i.horasTotal, 0);
-  const promedioAvance = Math.round(
-    mockGlobalData.reduce((s, i) => s + i.avancePromedio, 0) / mockGlobalData.length
-  );
-  const totalReprocesos = mockGlobalData.reduce((s, i) => s + i.reprocesos, 0);
-  const totalProyectos = mockGlobalData.length;
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const data = await getAllAvances();
+        if (!mounted) return;
+        // normalize
+        const normalized = (data || []).map((a) => ({
+          ...a,
+          reprocesos: a.reprocesos || [],
+          horasInvertidas: typeof a.horasInvertidas === 'number' ? a.horasInvertidas : Number(a.horasInvertidas) || 0,
+          avancePercent: a.totalMm ? Math.round(((a.avanceMm || 0) / a.totalMm) * 100) : 0,
+        }));
+        setAvances(normalized);
+      } catch (err) {
+        console.error('Error cargando avances para dashboard:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false };
+  }, []);
+
+  // Compute KPIs from avances grouped by proyecto
+  const grouped = {};
+  for (const a of avances) {
+    const key = a.proyecto || 'Sin proyecto';
+    if (!grouped[key]) grouped[key] = { proyecto: key, horasTotal: 0, avanceSum: 0, count: 0, reprocesos: 0 };
+    grouped[key].horasTotal += a.horasInvertidas || 0;
+    grouped[key].avanceSum += a.avancePercent || 0;
+    grouped[key].count += 1;
+    grouped[key].reprocesos += (a.reprocesos || []).length;
+  }
+  const globalData = Object.values(grouped);
+  const totalHoras = globalData.reduce((s, i) => s + i.horasTotal, 0);
+  const promedioAvance = globalData.length ? Math.round(globalData.reduce((s, i) => s + (i.avanceSum / (i.count || 1)), 0) / globalData.length) : 0;
+  const totalReprocesos = globalData.reduce((s, i) => s + i.reprocesos, 0);
+  const totalProyectos = globalData.length || mockGlobalData.length;
 
   return (
     <MainLayout activeKey="dashboard" onLogout={() => alert("Cerrar sesión")}>
@@ -205,19 +239,19 @@ export default function LiderDashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {mockGlobalData.map((p, idx) => (
+                  {(globalData.length ? globalData : mockGlobalData).map((p, idx) => (
                     <tr key={idx} className="border-b">
                       <td className="p-2 font-medium">{p.proyecto}</td>
-                      <td className="p-2">{p.horasTotal.toLocaleString()}</td>
+                      <td className="p-2">{(p.horasTotal || 0).toLocaleString()}</td>
                       <td className="p-2">
                         <div className="flex items-center gap-2">
                           <div className="w-28 h-3 bg-gray-200 rounded-full overflow-hidden">
                             <div
                               className="h-full bg-[#2f2b79]"
-                              style={{ width: `${p.avancePromedio}%` }}
+                              style={{ width: `${Math.round((p.avanceSum || 0) / (p.count || 1))}%` }}
                             />
                           </div>
-                          <span className="text-sm">{p.avancePromedio}%</span>
+                          <span className="text-sm">{Math.round((p.avanceSum || 0) / (p.count || 1))}%</span>
                         </div>
                       </td>
                       <td className="p-2">

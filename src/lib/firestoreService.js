@@ -37,6 +37,11 @@ export async function getAvancesByUser(userId) {
   }
 }
 
+export async function getAllAvances() {
+  const snap = await getDocs(avancesCol);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
 export async function addReproceso(avanceId, reproceso) {
   const avanceRef = doc(db, "avances", avanceId);
   await updateDoc(avanceRef, {
