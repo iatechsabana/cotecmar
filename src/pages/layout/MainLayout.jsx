@@ -48,7 +48,13 @@ export default function MainLayout({ children, onLogout, activeKey }) {
 
         <nav className="flex-1 w-full">
           <ul className="space-y-2 px-2 md:px-4">
-            {menuItems.map((item) => (
+            {menuItems
+              .filter((item) => {
+                // Solo mostrar Productividad si el usuario es líder
+                if (item.key === 'productividad' && user?.rol !== 'lider') return false;
+                return true;
+              })
+              .map((item) => (
               <li key={item.key}>
                 <button
                   className={`w-full flex items-center px-3 md:px-4 py-3 rounded-lg transition-colors font-semibold text-left border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-[#cbd8f9] shadow-sm 
