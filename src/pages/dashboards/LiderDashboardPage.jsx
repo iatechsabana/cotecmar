@@ -20,20 +20,9 @@ const mockGlobalData = [
   { proyecto: "Sin datos", horasTotal: 0, avancePromedio: 0, reprocesos: 0 },
 ];
 
-const curvaS = [
-  { semana: "S1", planificado: 10, real: 8 },
-  { semana: "S2", planificado: 25, real: 22 },
-  { semana: "S3", planificado: 45, real: 38 },
-  { semana: "S4", planificado: 65, real: 58 },
-  { semana: "S5", planificado: 80, real: 75 },
-  { semana: "S6", planificado: 95, real: 88 },
-];
-
-const estadosData = [
-  { name: "Completadas", value: 45, color: "#22c55e" },
-  { name: "En Progreso", value: 35, color: "#3b82f6" },
-  { name: "Bloqueadas", value: 20, color: "#ef4444" },
-];
+// curvaS and estadosData will be computed from real avances after load
+let curvaS = [];
+let estadosData = [];
 
 export default function LiderDashboardPage() {
   const [activeTab, setActiveTab] = useState("global");
@@ -78,6 +67,55 @@ export default function LiderDashboardPage() {
   const promedioAvance = globalData.length ? Math.round(globalData.reduce((s, i) => s + (i.avanceSum / (i.count || 1)), 0) / globalData.length) : 0;
   const totalReprocesos = globalData.reduce((s, i) => s + i.reprocesos, 0);
   const totalProyectos = globalData.length || mockGlobalData.length;
+
+  // Compute estadosData (counts by estado)
+  const estadoCounts = avances.reduce((acc, a) => {
+    const e = a.estado || 'En Progreso';
+    acc[e] = (acc[e] || 0) + 1;
+    return acc;
+  }, {});
+
+  estadosData = [
+    { name: 'Completadas', value: estadoCounts['Completado'] || 0, color: '#22c55e' },
+    { name: 'En Progreso', value: estadoCounts['En progreso'] || estadoCounts['En Progreso'] || 0, color: '#3b82f6' },
+    { name: 'Bloqueadas', value: estadoCounts['Bloqueado'] || 0, color: '#ef4444' },
+  ];
+
+  // Compute curvaS by grouping avances by week (based on fecha if available)
+  if (avances.length) {
+    const weekMap = new Map();
+    // helper to get ISO week label year-week
+    const getWeekKey = (fecha) => {
+      try {
+        const d = fecha ? new Date(fecha) : null;
+        if (!d || isNaN(d)) return null;
+        const onejan = new Date(d.getFullYear(),0,1);
+        const days = Math.floor((d - onejan) / (24*60*60*1000));
+        const week = Math.ceil((days + onejan.getDay()+1)/7);
+        return `${d.getFullYear()}-W${week}`;
+      } catch (err) { return null; }
+    };
+
+    for (const a of avances) {
+      const key = getWeekKey(a.fecha) || getWeekKey(a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().toISOString().split('T')[0] : a.createdAt?.seconds ? new Date(a.createdAt.seconds*1000).toISOString().split('T')[0] : null) || '0';
+      const entry = weekMap.get(key) || { semana: key, totalPercent: 0, count: 0 };
+      entry.totalPercent += a.avancePercent || 0;
+      entry.count += 1;
+      weekMap.set(key, entry);
+    }
+
+    const weeks = Array.from(weekMap.values()).sort((a,b) => a.semana.localeCompare(b.semana));
+    const n = weeks.length;
+    let cumulativeReal = 0;
+    curvaS = weeks.map((w, idx) => {
+      const avg = w.count ? Math.round(w.totalPercent / w.count) : 0;
+      cumulativeReal = Math.round(((cumulativeReal * idx) + avg) / (idx + 1));
+      const plan = Math.round(((idx + 1) / n) * 100);
+      return { semana: `S${idx+1}`, planificado: plan, real: cumulativeReal };
+    });
+  } else {
+    curvaS = [ { semana: 'S1', planificado: 0, real: 0 } ];
+  }
 
   return (
     <MainLayout activeKey="dashboard" onLogout={() => alert("Cerrar sesión")}>
