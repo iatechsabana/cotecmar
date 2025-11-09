@@ -4,6 +4,14 @@ import { useLocation } from 'react-router-dom';
 import { signOut as firebaseSignOut } from "../../lib/authService";
 import { useAuth } from "../../lib/AuthContext";
 import { useNavigate } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from '../../ui/dropdown-menu';
 
 const menuItems = [
   { key: "dashboard", label: "Dashboard", icon: MdDashboard },
@@ -115,10 +123,37 @@ export default function MainLayout({ children, onLogout, activeKey }) {
             </div>
             <div className="flex items-center gap-3">
               {user?.nombre ? (
-                <div className="hidden md:flex items-center gap-3 mr-2">
-                  <div className="w-8 h-8 rounded-full bg-[#eef2ff] flex items-center justify-center text-sm font-bold text-[#1e293b]">{user.nombre.charAt(0).toUpperCase()}</div>
-                  <div className="text-sm text-[#0f1724]">{user.nombre}</div>
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="hidden md:inline-flex items-center gap-3 mr-2 focus:outline-none">
+                      <div className="w-8 h-8 rounded-full bg-[#eef2ff] flex items-center justify-center text-sm font-bold text-[#1e293b]">{user.nombre.charAt(0).toUpperCase()}</div>
+                      <div className="text-sm text-white">{user.nombre}</div>
+                    </button>
+                  </DropdownMenuTrigger>
+
+                  <DropdownMenuContent sideOffset={8} className="w-56 bg-white text-[#0f1724]">
+                    <div className="px-3 py-2">
+                      <div className="text-sm font-semibold text-[#0f1724]">{user.nombre}</div>
+                      {user.email && <div className="text-xs text-gray-500">{user.email}</div>}
+                      {user.rol && <div className="text-xs text-gray-500 mt-1">Rol: <span className="font-medium text-[#2f2b79]">{user.rol}</span></div>}
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => {
+                      // go to profile or settings
+                      navigate('/mi-perfil');
+                    }}>Perfil</DropdownMenuItem>
+                    <DropdownMenuItem onClick={async () => {
+                      try {
+                        await firebaseSignOut();
+                        if (typeof onLogout === 'function') onLogout();
+                        window.location.href = '/';
+                      } catch (err) {
+                        console.error('Error cerrando sesión:', err);
+                        if (typeof onLogout === 'function') onLogout();
+                      }
+                    }} className="text-destructive">Salir</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ) : null}
             </div>
         </header>
